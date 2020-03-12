@@ -1,0 +1,33 @@
+{
+  "name": "git-parser",
+  "version": "1.0.0",
+  "description": ".git parser",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack",
+    "work": "webpack --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alessaloisio/git-parser.git"
+  },
+  "keywords": [
+    "git",
+    "parser"
+  ],
+  "author": "Aloisio Alessandro",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alessaloisio/git-parser/issues"
+  },
+  "homepage": "https://github.com/alessaloisio/git-parser#readme",
+  "devDependencies": {
+    "@babel/core": "^7.8.7",
+    "@babel/plugin-proposal-class-properties": "^7.8.3",
+    "@babel/preset-env": "^7.8.7",
+    "babel-loader": "^8.0.6",
+    "webpack": "^4.42.0",
+    "webpack-cli": "^3.3.11"
+  }
+}
