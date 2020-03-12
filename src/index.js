@@ -1,8 +1,9 @@
 "use strict";
 
-const path = require("path");
+import { resolve } from "path";
+import fs from "fs";
 
-class GitParser {
+export class GitParser {
   constructor(opts = {}) {
     this.path = opts.path || "./.git";
     this.currentBranch = opts.branch || "master";
@@ -11,7 +12,14 @@ class GitParser {
   }
 
   verifyPath() {
-    console.log(this.path);
+    fs.access(this.path, fs.F_OK, err => {
+      if (err) {
+        console.error(err);
+        return;
+      }
+
+      console.log("file exist");
+    });
   }
 
   branch() {
@@ -23,4 +31,18 @@ class GitParser {
   }
 }
 
-module.exports = GitParser;
+const codeToStatus = function(code) {
+  const map = {
+    A: "Added",
+    C: "Copied",
+    D: "Deleted",
+    M: "Modified",
+    R: "Renamed",
+    T: "Type-Change",
+    U: "Unmerged",
+    X: "Unknown",
+    B: "Broken"
+  };
+
+  return map[code.charAt(0)];
+};

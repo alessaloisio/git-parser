@@ -1,10 +1,13 @@
 const path = require("path");
+const nodeExternals = require("webpack-node-externals");
 
 module.exports = {
   mode: "production",
+  target: "node",
+  externals: [nodeExternals()],
   entry: path.resolve(__dirname, "src/index.js"),
   output: {
-    libraryTarget: "commonjs2",
+    libraryTarget: "commonjs",
     filename: "index.js",
     path: path.resolve(__dirname, "dist")
   },
@@ -18,8 +21,12 @@ module.exports = {
           options: {
             presets: ["@babel/preset-env"],
             plugins: [
-              "@babel/plugin-proposal-object-rest-spread",
-              "@babel/plugin-proposal-class-properties"
+              ["@babel/plugin-transform-classes", { loose: true }],
+              ["@babel/plugin-transform-destructuring", { loose: true }],
+              ["@babel/plugin-transform-spread", { loose: true }],
+              ["@babel/plugin-proposal-object-rest-spread"],
+              ["@babel/plugin-syntax-dynamic-import"],
+              ["@babel/plugin-syntax-import-meta"]
             ]
           }
         }
