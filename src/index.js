@@ -1,37 +1,96 @@
 "use strict";
 
 import { resolve } from "path";
-import fs from "fs";
+import { readFileSync, readdirSync } from "fs";
+import zlib from "zlib";
 
 export class GitParser {
   constructor(opts = {}) {
     this.path = opts.path || "./.git";
-    this.currentBranch = opts.branch || "master";
+    this.selectedBranch = opts.branch || "master";
 
-    this.verifyPath();
+    this.HEAD = this.getHead();
+    this.lastCommit = this.getLastCommit();
   }
 
-  verifyPath() {
-    fs.access(this.path, fs.F_OK, err => {
-      if (err) {
-        console.error(err);
-        return;
-      }
+  getHead() {
+    const content = getFileContent(resolve(this.path, "HEAD"));
+    return content.trim().slice(content.lastIndexOf("/") + 1);
+  }
 
-      console.log("file exist");
-    });
+  getLastCommit() {
+    return getFileContent(
+      resolve(this.path, "refs/heads", this.selectedBranch)
+    ).trim();
   }
 
   branch() {
-    console.log("show branches");
+    return getFilesDir(resolve(this.path, "refs/heads"));
   }
 
   stage() {
-    console.log("show stages");
+    return this.recursiveStage(this.lastCommit);
+  }
+
+  recursiveStage(commit, result = {}) {
+    const objectDir = commit.slice(0, 2);
+    const objectFile = commit.slice(2);
+
+    const content = decryptFile(
+      resolve(this.path, "objects", objectDir, objectFile)
+    );
+
+    console.log(content);
+    if (content.commit.length > 0) {
+      this.recursiveStage(content.commit, result);
+    }
+
+    return result;
   }
 }
 
-const codeToStatus = function(code) {
+const getFileContent = (path, str = true) => {
+  let buf;
+
+  try {
+    buf = readFileSync(path);
+  } catch (e) {
+    throw new Error(`"${path}" file not found.`);
+  }
+
+  return str ? buf.toString() : buf;
+};
+
+const getFilesDir = path => {
+  let files;
+
+  try {
+    files = readdirSync(path);
+  } catch (e) {
+    throw new Error(`"${path}" not file found.`);
+  }
+
+  return files;
+};
+
+const decryptFile = path => {
+  const obj = {};
+  const compressed = getFileContent(path, false);
+  const content = zlib.inflateSync(compressed).toString();
+
+  console.log("content decrypted", content);
+  obj.commit = getCommit(content);
+
+  return obj;
+};
+
+const getCommit = content => {
+  const regex = /commit (?<status>.+) (?<commit>\w+)/;
+  const matchObj = content.match(regex);
+  return matchObj !== null ? matchObj.groups.commit : "";
+};
+
+const codeToStatus = code => {
   const map = {
     A: "Added",
     C: "Copied",
