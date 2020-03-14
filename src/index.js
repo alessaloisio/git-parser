@@ -35,14 +35,16 @@ export class GitParser {
   recursiveStage(commit, result = {}) {
     const objectDir = commit.slice(0, 2);
     const objectFile = commit.slice(2);
+    const file = resolve(this.path, "objects", objectDir, objectFile);
 
-    const content = decryptFile(
-      resolve(this.path, "objects", objectDir, objectFile)
-    );
-
+    console.log("file", file);
+    const content = decryptFile(file);
     console.log(content);
-    if (content.commit.length > 0) {
-      this.recursiveStage(content.commit, result);
+
+    if (content) {
+      if (content.commit.length > 0) {
+        this.recursiveStage(content.commit, result);
+      }
     }
 
     return result;
@@ -75,11 +77,26 @@ const getFilesDir = path => {
 
 const decryptFile = path => {
   const obj = {};
-  const compressed = getFileContent(path, false);
-  const content = zlib.inflateSync(compressed).toString();
 
-  console.log("content decrypted", content);
-  obj.commit = getCommit(content);
+  const compressed = getFileContent(path, false);
+  const content = zlib.unzipSync(compressed).toString("utf8");
+
+  const type = content.slice(0, content.indexOf(" "));
+
+  console.log("type", type, typeof type);
+  console.log("content", content);
+
+  switch (type) {
+    case "commit":
+      obj.commit = getCommit(content);
+      obj.message = content.slice(content.indexOf("\n\n") + 2).trim();
+      break;
+    case "tree":
+      obj.commit = "";
+      break;
+    default:
+      return null;
+  }
 
   return obj;
 };
