@@ -2,7 +2,7 @@
 
 import { resolve } from "path";
 import { readFileSync, readdirSync } from "fs";
-import zlib from "zlib";
+import { inflateSync } from "zlib";
 
 export class GitParser {
   constructor(opts = {}) {
@@ -29,23 +29,85 @@ export class GitParser {
   }
 
   stage() {
-    return this.recursiveStage(this.lastCommit);
+    const content = this.recursiveStage(this.lastCommit);
+
+    if (content && content.tree) {
+      content.tree = {
+        commit: content.tree,
+        files: this.recursiveStage(content.tree)
+      };
+    }
+
+    return content;
   }
 
-  recursiveStage(commit, result = {}) {
+  recursiveStage(commit) {
     const objectDir = commit.slice(0, 2);
     const objectFile = commit.slice(2);
+
     const file = resolve(this.path, "objects", objectDir, objectFile);
+    const content = this.decryptFile(file);
 
-    console.log("file", file);
-    const content = decryptFile(file);
-    console.log(content);
+    return content;
+  }
 
-    if (content) {
-      if (content.commit.length > 0) {
-        this.recursiveStage(content.commit, result);
-      }
+  decryptFile(path) {
+    const buffer = inflateSync(getFileContent(path, false));
+    const type = buffer.slice(0, buffer.indexOf(32)).toString("utf8");
+    const content = buffer.slice(buffer.indexOf(0) + 1);
+
+    let obj = {};
+
+    switch (type) {
+      case "commit":
+        obj = this.parseCommit(content.toString("utf8"));
+        break;
+      case "tree":
+        obj = this.parseTree(content.toString("hex"));
+        break;
+      default:
+        return null;
     }
+
+    return obj;
+  }
+
+  parseCommit(content) {
+    const regex = /tree (?<tree>\w*)\s?parent (?<parent>\w*)\s?author (?<author>[\w _\-<>@.]*>).*\s?committer (?<committer>[\w _\-<>@.]*>).*\n\n(?<message>.*)/;
+    const matchObj = content.match(regex);
+
+    const obj = {};
+
+    obj.tree = matchObj.groups.tree;
+    obj.parent = matchObj.groups.parent;
+    obj.author = matchObj.groups.author;
+    obj.committer = matchObj.groups.committer;
+    obj.message = matchObj.groups.message;
+
+    return obj;
+  }
+
+  parseTree(content) {
+    const regex = /(?<mode>\w*?)20(?<file>\w*?)00(?<oid>\w{40})/g;
+
+    const result = {};
+
+    Array.from(content.matchAll(regex), match => {
+      const obj = {};
+
+      obj.mode = Buffer.from(match.groups.mode, "hex").toString("utf8");
+      if (obj.mode === "40000") obj.mode = 0 + obj.mode;
+
+      obj.type = mode2type(obj.mode);
+      obj.file = Buffer.from(match.groups.file, "hex").toString("utf8");
+      obj.oid = match.groups.oid;
+
+      if (obj.type === "tree") {
+        obj.files = this.recursiveStage(obj.oid);
+      }
+
+      result[obj.file] = obj;
+    });
 
     return result;
   }
@@ -75,50 +137,19 @@ const getFilesDir = path => {
   return files;
 };
 
-const decryptFile = path => {
-  const obj = {};
-
-  const compressed = getFileContent(path, false);
-  const content = zlib.unzipSync(compressed).toString("utf8");
-
-  const type = content.slice(0, content.indexOf(" "));
-
-  console.log("type", type, typeof type);
-  console.log("content", content);
-
-  switch (type) {
-    case "commit":
-      obj.commit = getCommit(content);
-      obj.message = content.slice(content.indexOf("\n\n") + 2).trim();
-      break;
-    case "tree":
-      obj.commit = "";
-      break;
+const mode2type = mode => {
+  switch (mode) {
+    case "040000":
+      return "tree";
+    case "100644":
+      return "blob";
+    case "100755":
+      return "blob";
+    case "120000":
+      return "blob";
+    case "160000":
+      return "commit";
     default:
-      return null;
+      throw new Error(`Mode not found.`);
   }
-
-  return obj;
-};
-
-const getCommit = content => {
-  const regex = /commit (?<status>.+) (?<commit>\w+)/;
-  const matchObj = content.match(regex);
-  return matchObj !== null ? matchObj.groups.commit : "";
-};
-
-const codeToStatus = code => {
-  const map = {
-    A: "Added",
-    C: "Copied",
-    D: "Deleted",
-    M: "Modified",
-    R: "Renamed",
-    T: "Type-Change",
-    U: "Unmerged",
-    X: "Unknown",
-    B: "Broken"
-  };
-
-  return map[code.charAt(0)];
 };
