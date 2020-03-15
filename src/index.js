@@ -28,20 +28,23 @@ export class GitParser {
     return getFilesDir(resolve(this.path, "refs/heads"));
   }
 
-  stage() {
-    const content = this.recursiveStage(this.lastCommit);
+  diff() {
+    const currentStage = this.recursiveObject(this.lastCommit);
+    currentStage.present = {
+      commit: currentStage.present,
+      files: this.recursiveObject(currentStage.present)
+    };
 
-    if (content && content.tree) {
-      content.tree = {
-        commit: content.tree,
-        files: this.recursiveStage(content.tree)
-      };
-    }
+    const previousStage = this.recursiveObject(currentStage.parent);
+    currentStage.parent = {
+      commit: previousStage.present,
+      files: this.recursiveObject(previousStage.present)
+    };
 
-    return content;
+    return currentStage;
   }
 
-  recursiveStage(commit) {
+  recursiveObject(commit) {
     const objectDir = commit.slice(0, 2);
     const objectFile = commit.slice(2);
 
@@ -65,6 +68,9 @@ export class GitParser {
       case "tree":
         obj = this.parseTree(content.toString("hex"));
         break;
+      case "blob":
+        obj = content.toString();
+        break;
       default:
         return null;
     }
@@ -78,7 +84,7 @@ export class GitParser {
 
     const obj = {};
 
-    obj.tree = matchObj.groups.tree;
+    obj.present = matchObj.groups.tree;
     obj.parent = matchObj.groups.parent;
     obj.author = matchObj.groups.author;
     obj.committer = matchObj.groups.committer;
@@ -102,8 +108,13 @@ export class GitParser {
       obj.file = Buffer.from(match.groups.file, "hex").toString("utf8");
       obj.oid = match.groups.oid;
 
-      if (obj.type === "tree") {
-        obj.files = this.recursiveStage(obj.oid);
+      switch (obj.type) {
+        case "tree":
+          obj.files = this.recursiveObject(obj.oid);
+          break;
+        case "blob":
+          obj.content = this.recursiveObject(obj.oid);
+          break;
       }
 
       result[obj.file] = obj;
