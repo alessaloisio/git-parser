@@ -49,9 +49,7 @@ export class GitParser {
       files: { ...this.stage(currentStage.parent).present.files }
     };
 
-    console.log(detectDiff(currentStage.present, currentStage.parent));
-
-    return currentStage;
+    return detectDiff(currentStage.present, currentStage.parent);
   }
 
   recursiveObject(commit) {
@@ -210,9 +208,19 @@ const detectDiff = (current, prev, i = 0) => {
     }
   });
 
-  if (i === 0) {
-    console.log("removed ?", prev.files.services.files);
-  }
+  if (i === 0) appendWithStatus(result, prev.files, "R");
 
   return result;
+};
+
+const appendWithStatus = (target, obj, status) => {
+  Object.keys(obj).map(file => {
+    if (obj[file].type === "tree") {
+      if (typeof target[file] === "undefined") target[file] = {};
+      appendWithStatus(target[file], obj[file].files, status);
+    } else {
+      obj[file].status = status;
+      target[file] = obj[file];
+    }
+  });
 };
