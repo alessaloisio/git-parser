@@ -28,18 +28,28 @@ export class GitParser {
     return getFilesDir(resolve(this.path, "refs/heads"));
   }
 
-  diff() {
-    const currentStage = this.recursiveObject(this.lastCommit);
+  stage(commit = null) {
+    const currentStage = this.recursiveObject(
+      commit ? commit : this.lastCommit
+    );
+
     currentStage.present = {
       commit: currentStage.present,
       files: this.recursiveObject(currentStage.present)
     };
 
-    const previousStage = this.recursiveObject(currentStage.parent);
+    return currentStage;
+  }
+
+  diff() {
+    const currentStage = this.stage();
+
     currentStage.parent = {
-      commit: previousStage.present,
-      files: this.recursiveObject(previousStage.present)
+      commit: currentStage.parent,
+      files: { ...this.stage(currentStage.parent).present.files }
     };
+
+    console.log(detectDiff(currentStage.present, currentStage.parent));
 
     return currentStage;
   }
@@ -163,4 +173,46 @@ const mode2type = mode => {
     default:
       throw new Error(`Mode not found.`);
   }
+};
+
+const detectDiff = (current, prev, i = 0) => {
+  const result = {};
+
+  Object.keys(current.files).map(file => {
+    const c = current.files[file];
+    const p = prev.files[file];
+
+    switch (c.type) {
+      case "blob":
+        if (p) {
+          if (c.content !== p.content) {
+            c.status = "M";
+            result[file] = c;
+          }
+          delete prev.files[file];
+        } else {
+          c.status = "NF";
+          result[file] = c;
+        }
+        break;
+      case "tree":
+        if (p) {
+          const diff = detectDiff(c, p, i + 1);
+          if (Object.keys(diff).length > 0) {
+            result[file] = diff;
+          } else {
+            delete prev.files[file];
+          }
+        } else {
+          result[file] = c.files;
+        }
+        break;
+    }
+  });
+
+  if (i === 0) {
+    console.log("removed ?", prev.files.services.files);
+  }
+
+  return result;
 };
